@@ -1,0 +1,45 @@
+/***
+ * Main elements styles
+ ***/
+
+body {
+  background-color: black;
+  font-family: consolas;
+  color: yellow;
+  overflow: hidden;
+}
+
+.orange {
+  color: orange;
+}
+
+/***
+ * Some divs' styles
+ ***/
+
+#main {
+  width: 700px;
+}
+
+#github {
+  position: absolute;
+  width: 100%;
+  left: 730px;
+  top: 50px;
+}
+
+/***
+ * Other styles
+ ***/
+
+#canvas {
+  border: none;
+}
+
+#header {
+  margin: auto;
+}
+
+#date {
+  color: yellow;
+}
