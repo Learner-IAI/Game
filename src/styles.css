@@ -6,7 +6,6 @@ body {
   background-color: black;
   font-family: consolas;
   color: yellow;
-  overflow: hidden;
 }
 
 .orange {
@@ -22,10 +21,7 @@ body {
 }
 
 #github {
-  position: absolute;
   width: 100%;
-  left: 730px;
-  top: 50px;
 }
 
 /***
