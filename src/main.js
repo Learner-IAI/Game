@@ -11,11 +11,26 @@ import * as THREE from 'three';
 /* Orbit controls import */
 import { OrbitControls } from 'three-orbitcontrols/OrbitControls.js';
 
+/* .GLTF model loader import */
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+
 /* Git last commit hash import */
 import hash from '../hash.txt';
 
 /* Webpack build date import */
 import date from '../version.txt';
+
+function dumpObject (obj, lines = [], isLast = true, prefix = '') {
+  const localPrefix = isLast ? '└─' : '├─';
+  lines.push(`${prefix}${prefix ? localPrefix : ''}${obj.name || '*no-name*'} [${obj.type}]`);
+  const newPrefix = prefix + (isLast ? '  ' : '│ ');
+  const lastNdx = obj.children.length - 1;
+  obj.children.forEach((child, ndx) => {
+    const isLast = ndx === lastNdx;
+    dumpObject(child, lines, isLast, newPrefix);
+  });
+  return lines;
+}
 
 /* Timer representation class */
 class Timer {
@@ -26,7 +41,9 @@ class Timer {
 
   /* Update timer method */
   update () {
-    this.time = (Date.now() - this.start) / 1000;
+    if (!this.isPause) {
+      this.time = (Date.now() - this.start) / 1000;
+    }
   }
 }
 
@@ -34,11 +51,47 @@ class Timer {
 class Car {
   constructor () {
     this.geom = new THREE.CubeGeometry(20, 4, 4);
-    this.material = new THREE.MeshPhongMaterial({
-      color: 0xdedede
-    });
+
     this.normal = new THREE.Vector3(0, 1, 0);
+    this.dir = new THREE.Vector3(-1, 0, 0);
     this.coords = new THREE.Vector2();
+
+    this.done = false;
+
+    this.velocity = 5;
+    this.rotVelocity = Math.PI / 50;
+    this.cameraDistance = 30;
+  }
+
+  loadModel (modelURL, scene) {
+    const loader = new GLTFLoader();
+    loader.load(modelURL, (gltf) => {
+      const car = new THREE.Object3D();
+      const root = gltf.scene;
+
+      car.name = 'car';
+      root.traverse(function (object) {
+        if (object.isMesh) {
+          object.castShadow = true;
+          object.receiveShadow = true;
+        }
+      });
+
+      root.scale.set(100, 100, 100);
+      const bbox = new THREE.Box3();
+      bbox.setFromObject(root);
+      const center = bbox.getCenter();
+      center.negate();
+      car.position.set(center.x, center.y, center.z);
+      car.position.add(new THREE.Vector3(0, 50, 0));
+      center.negate();
+      car.offset = center;
+
+      console.log(dumpObject(root).join('\n')); // Debug output
+      this.done = true;
+      car.add(root);
+      scene.add(car);
+    });
   }
 
   /* Put car on landscape static method */
@@ -176,6 +229,8 @@ class Drawer {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMapSoft = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    this.keyboard = {};
   }
 
   /* Add light to scene method */
@@ -270,45 +325,59 @@ class Drawer {
         land.castShadow = false;
         land.receiveShadow = true;
       });
-      this.car.putOnLandscape(carMesh, this.land, 0, 0);
+      // this.car.putOnLandscape(carMesh, this.land, 0, 0);
     });
 
     // Add car
     this.car = new Car();
-    const carMesh = new THREE.Mesh(this.car.geom, this.car.material);
-    carMesh.castShadow = true;
-    carMesh.receiveShadow = true;
-    carMesh.position.set(0, 50, 0);
-    carMesh.name = 'car';
-    this.scene.add(carMesh);
-
-    const carAxes = new THREE.AxesHelper(10, 10, 10);
-    carMesh.add(carAxes);
+    this.car.loadModel('../bin/car.glb', this.scene);
   }
 
-  /* Keyboard input handle method */
-  handleInput (event) {
-    if (!this.land.done) {
-      return;
-    }
+  /* Keyboard input (key down) handle method */
+  handleInputDown (event) {
     const keyCode = event.key;
-    const carMesh = this.scene.getObjectByName('car');
-    switch (keyCode) {
-      case 'w':
-        this.car.putOnLandscape(carMesh, this.land, this.car.coords.x + 1, this.car.coords.y);
-        break;
-      case 'a':
-        this.car.putOnLandscape(carMesh, this.land, this.car.coords.x, this.car.coords.y + 1);
-        break;
-      case 's':
-        this.car.putOnLandscape(carMesh, this.land, this.car.coords.x - 1, this.car.coords.y);
-        break;
-      case 'd':
-        this.car.putOnLandscape(carMesh, this.land, this.car.coords.x, this.car.coords.y - 1);
-        break;
-      case '0':
-        this.car.putOnLandscape(carMesh, this.land, 0, 0);
-        break;
+    this.keyboard[keyCode] = true;
+  }
+
+  /* Keyboard input (key up) handle method */
+  handleInputUp (event) {
+    const keyCode = event.key;
+    this.keyboard[keyCode] = false;
+  }
+
+  /* Handle all the input has come */
+  handleInput () {
+    const car = this.scene.getObjectByName('car');
+    const carObj = car.children[0].children[0].children[0];
+    if (('w' in this.keyboard && this.keyboard.w) ||
+        ('W' in this.keyboard && this.keyboard.W)) {
+      car.position.add(this.car.dir.clone().multiplyScalar(this.car.velocity));
+      this.camera.position.add(this.car.dir.clone().multiplyScalar(this.car.velocity));
+
+      carObj.children[3].rotateOnAxis(new THREE.Vector3(1, 0, 0), Math.PI / 10);
+      carObj.children[8].rotateOnAxis(new THREE.Vector3(1, 0, 0), Math.PI / 10);
+      carObj.children[6].rotateOnAxis(new THREE.Vector3(1, 0, 0), Math.PI / 10);
+      carObj.children[9].rotateOnAxis(new THREE.Vector3(1, 0, 0), Math.PI / 10);
+    }
+    if (('s' in this.keyboard && this.keyboard.s) ||
+        ('S' in this.keyboard && this.keyboard.S)) {
+      car.position.sub(this.car.dir.clone().multiplyScalar(this.car.velocity));
+      this.camera.position.sub(this.car.dir.clone().multiplyScalar(this.car.velocity));
+
+      carObj.children[3].rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI / 10);
+      carObj.children[8].rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI / 10);
+      carObj.children[6].rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI / 10);
+      carObj.children[9].rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI / 10);
+    }
+    if (('a' in this.keyboard && this.keyboard.a) ||
+        ('A' in this.keyboard && this.keyboard.A)) {
+      this.car.dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.car.rotVelocity);
+      car.rotateOnAxis(new THREE.Vector3(0, 1, 0), this.car.rotVelocity);
+    }
+    if (('d' in this.keyboard && this.keyboard.d) ||
+        ('D' in this.keyboard && this.keyboard.D)) {
+      this.car.dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), -this.car.rotVelocity);
+      car.rotateOnAxis(new THREE.Vector3(0, 1, 0), -this.car.rotVelocity);
     }
   }
 
@@ -326,12 +395,25 @@ class Drawer {
     const hem = this.scene.getObjectByName('hem');
     hem.intensity = 0.2 + 0.3 * Math.sin(this.timer.time * (2 * Math.PI) / 30);
     this.bgMesh2.material.opacity = 0.5 - 0.5 * (Math.sin(this.timer.time * (2 * Math.PI) / 30 + 1) / 2);
+
+    // Update car latent camera
+    if (this.car.done) {
+      const pos = this.scene.getObjectByName('car').position.clone();
+      pos.add(this.scene.getObjectByName('car').offset);
+      this.camera.lookAt(pos);
+      this.controls.target.set(pos.x, pos.y, pos.z);
+
+      // Handle keyboard input
+      this.handleInput();
+    }
+
+    // Update skybox position
+    this.bgMesh.position.copy(this.camera.position);
+    this.bgMesh2.position.copy(this.camera.position);
   }
 
   /* Render method */
   render () {
-    this.bgMesh.position.copy(this.camera.position);
-    this.bgMesh2.position.copy(this.camera.position);
     this.renderer.render(this.bgScene, this.camera);
     this.renderer.render(this.scene, this.camera);
   }
@@ -360,12 +442,18 @@ function threejsStart () {
 
 /* Keyboard input handle function */
 function onDocumentKeyDown (event) {
-  drawer.handleInput(event);
+  drawer.handleInputDown(event);
+}
+
+/* Keyboard input handle function */
+function onDocumentKeyUp (event) {
+  drawer.handleInputUp(event);
 }
 
 /* Add event handle for dynamically updating objects */
 document.addEventListener('DOMContentLoaded', threejsStart);
-document.addEventListener('keydown', onDocumentKeyDown, false);
+document.addEventListener('keydown', onDocumentKeyDown);
+document.addEventListener('keyup', onDocumentKeyUp);
 
 document.getElementById('hash').innerHTML = 'Last git commit hash: ' + hash;
 document.getElementById('date').innerHTML = JSON.parse(date).date;
