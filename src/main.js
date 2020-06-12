@@ -38,12 +38,16 @@ class Timer {
 /* Car representation class */
 class Car {
   constructor () {
-    this.normal = new THREE.Vector3(0, 1, 0);
-    this.dir = new THREE.Vector3(-1, 0, 0);
+    this.group = new THREE.Group();
+
+    this.dir2 = new THREE.Vector2(1, 0);
+    this.dir = new THREE.Vector3(0, 1, 0);
+    this.normal = new THREE.Vector3(1, 0, 0);
+    this.coords = new THREE.Vector2(0, 0);
 
     this.done = false;
 
-    this.velocity = 1.25;
+    this.velocity = 0.5;
     this.rotVelocity = Math.PI / 75;
     this.cameraDistance = 10;
   }
@@ -55,30 +59,9 @@ class Car {
   }
 
   /* Put car on landscape method */
-  putOnLandscape (mesh, land, x, y) {
-    x %= land.width;
-    if (x < 0) {
-      x += land.width;
-    }
-    y %= land.height;
-    if (y < 0) {
-      y += land.height;
-    }
-    const pos = land.vertices[y * land.width + x];
-    mesh.position.set(...Object.values(pos));
-
-    const newNormal = land.faces[2 * (y * land.width + x)].vertexNormals[0];
-    newNormal.negate();
-    const cross = new THREE.Vector3();
-    cross.crossVectors(this.normal, newNormal);
-    const dot = newNormal.dot(this.normal);
-    const angle = -Math.acos(dot / (newNormal.length() * this.normal.length()));
-    this.normal.applyAxisAngle(cross, angle);
-    if (Number.isNaN(this.normal.x)) {
-      return;
-    }
-
-    mesh.rotateOnAxis(cross, angle);
+  putOnLandscape (land) {
+    const point = land.getPoint(this.coords);
+    this.group.position.set(point.x, point.y, point.z);
   }
 }
 
@@ -87,6 +70,35 @@ class Landscape extends THREE.Geometry {
   constructor () {
     super();
     this.done = false;
+  }
+
+  /* Get point world coordinates from some local landscape coordinates method */
+  getPoint (vec) {
+    var x = vec.x;
+    var y = vec.y;
+    while (x < 0) {
+      x += this.width;
+    }
+    while (y < 0) {
+      y += this.height;
+    }
+    x %= this.width;
+    y %= this.height;
+
+    const X = x - Math.floor(x);
+    const Y = y - Math.floor(y);
+    x = Math.floor(x);
+    y = Math.floor(y);
+
+    var p1 = this.vertices[y * this.width + x];
+    var p2 = this.vertices[y * this.width + (x + 1) % this.width];
+    var p3 = this.vertices[(y + 1) % this.height * this.width + x];
+    var p4 = this.vertices[(y + 1) % this.height * this.width + (x + 1) % this.width];
+
+    return p1.clone().multiplyScalar((1 - X) * (1 - Y))
+      .add(p2.clone().multiplyScalar(X * (1 - Y)))
+      .add(p3.clone().multiplyScalar((1 - X) * Y))
+      .add(p4.clone().multiplyScalar(X * Y));
   }
 
   /* Make torus geometry for landscape method */
@@ -239,12 +251,13 @@ class Drawer {
 
   /* Handle all the input has come */
   handleInput () {
-    const car = this.scene.getObjectByName('car');
-    const carObj = car.children[0].children[0].children[0];
+    const carObj = this.car.group.children[0].children[0].children[0];
     if (('w' in this.keyboard && this.keyboard.w) ||
         ('W' in this.keyboard && this.keyboard.W)) {
-      car.position.add(this.car.dir.clone().multiplyScalar(this.car.velocity));
-      this.camera.position.add(this.car.dir.clone().multiplyScalar(this.car.velocity));
+      // this.car.group.position.add(this.car.dir.clone().multiplyScalar(this.car.velocity));
+      // this.camera.position.add(this.car.dir.clone().multiplyScalar(this.car.velocity));
+
+      this.car.coords.add(this.car.dir2.clone().multiplyScalar(this.car.velocity));
 
       carObj.children[3].rotateOnAxis(new THREE.Vector3(1, 0, 0), Math.PI / 8);
       carObj.children[8].rotateOnAxis(new THREE.Vector3(1, 0, 0), Math.PI / 8);
@@ -253,8 +266,10 @@ class Drawer {
     }
     if (('s' in this.keyboard && this.keyboard.s) ||
         ('S' in this.keyboard && this.keyboard.S)) {
-      car.position.sub(this.car.dir.clone().multiplyScalar(this.car.velocity));
-      this.camera.position.sub(this.car.dir.clone().multiplyScalar(this.car.velocity));
+      // this.car.group.position.sub(this.car.dir.clone().multiplyScalar(this.car.velocity));
+      // this.camera.position.sub(this.car.dir.clone().multiplyScalar(this.car.velocity));
+
+      this.car.coords.sub(this.car.dir2.clone().multiplyScalar(this.car.velocity));
 
       carObj.children[3].rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI / 8);
       carObj.children[8].rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI / 8);
@@ -263,13 +278,17 @@ class Drawer {
     }
     if (('a' in this.keyboard && this.keyboard.a) ||
         ('A' in this.keyboard && this.keyboard.A)) {
+      this.car.dir2.rotateAround(new THREE.Vector2(), this.car.rotVelocity);
       this.car.dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.car.rotVelocity);
-      car.rotateOnAxis(new THREE.Vector3(0, 1, 0), this.car.rotVelocity);
+
+      this.car.group.rotateOnAxis(new THREE.Vector3(0, 1, 0), this.car.rotVelocity);
     }
     if (('d' in this.keyboard && this.keyboard.d) ||
         ('D' in this.keyboard && this.keyboard.D)) {
+      this.car.dir2.rotateAround(new THREE.Vector2(), -this.car.rotVelocity);
       this.car.dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), -this.car.rotVelocity);
-      car.rotateOnAxis(new THREE.Vector3(0, 1, 0), -this.car.rotVelocity);
+
+      this.car.group.rotateOnAxis(new THREE.Vector3(0, 1, 0), -this.car.rotVelocity);
     }
   }
 
@@ -315,7 +334,7 @@ class Drawer {
       light.position.set(300, 300, 0);
       light.castShadow = true;
       light.shadow.radius = 8;
-    }, 0xffff55, 1);
+    }, 0xffff88, 0.5);
 
     // Add toroidal landscape
     this.land = new Landscape();
@@ -337,8 +356,7 @@ class Drawer {
     // Add car
     this.car = new Car();
     this.car.loadModel('../bin/car.glb', (gltf) => {
-      const carGroup = new THREE.Group();
-      carGroup.name = 'car';
+      this.car.group.name = 'car';
 
       const root = gltf.scene;
       root.traverse(function (object) {
@@ -352,46 +370,48 @@ class Drawer {
       const bbox = new THREE.Box3();
       bbox.setFromObject(root);
       const offset = bbox.getCenter().negate();
-      carGroup.position.set(offset.x, offset.y, offset.z);
-      carGroup.position.add(new THREE.Vector3(0, 25, 0));
-      carGroup.offset = offset;
+      this.car.group.position.set(offset.x, offset.y, offset.z);
+      this.car.group.position.add(new THREE.Vector3(0, 25, 0));
+      this.car.group.offset = offset;
 
       const lights = new THREE.Group();
 
       const leftLight = new THREE.SpotLight(0xffffff, 1, 80, Math.PI / 8, 0.7);
-      leftLight.position.set(-4.2, 0.1, -0.95).sub(carGroup.offset);
-      leftLight.target.position.set(-5, 0.1, -0.95).sub(carGroup.offset);
+      leftLight.position.set(-4.2, 0.1, -0.95).sub(this.car.group.offset);
+      leftLight.target.position.set(-5, 0.1, -0.95).sub(this.car.group.offset);
       lights.add(leftLight);
       lights.add(leftLight.target);
       const leftLightMesh = new THREE.Mesh(
         new THREE.SphereGeometry(0.15, 10, 10),
         new THREE.MeshBasicMaterial({ color: 0xffffff })
       );
-      leftLightMesh.position.set(-4.2, 0.1, -0.95).sub(carGroup.offset);
+      leftLightMesh.position.set(-4.2, 0.1, -0.95).sub(this.car.group.offset);
       lights.add(leftLightMesh);
 
       const rightight = new THREE.SpotLight(0xffffff, 1, 80, Math.PI / 8, 0.7);
-      rightight.position.set(-4.2, 0.1, 0.95).sub(carGroup.offset);
-      rightight.target.position.set(-5, 0.1, 0.95).sub(carGroup.offset);
+      rightight.position.set(-4.2, 0.1, 0.95).sub(this.car.group.offset);
+      rightight.target.position.set(-5, 0.1, 0.95).sub(this.car.group.offset);
       lights.add(rightight);
       lights.add(rightight.target);
       const rightLightMesh = new THREE.Mesh(
         new THREE.SphereGeometry(0.15, 10, 10),
         new THREE.MeshBasicMaterial({ color: 0xffffff })
       );
-      rightLightMesh.position.set(-4.2, 0.1, 0.95).sub(carGroup.offset);
+      rightLightMesh.position.set(-4.2, 0.1, 0.95).sub(this.car.group.offset);
       lights.add(rightLightMesh);
 
-      carGroup.add(root);
-      carGroup.add(lights);
+      this.car.group.add(root);
+      this.car.group.add(lights);
 
-      this.camera.position.set(26, 38, 0);
-      this.scene.add(carGroup);
+      this.camera.position.set(152, 13, 0);
+      this.scene.add(this.car.group);
       this.car.done = true;
     });
+    this.debug = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 10), new THREE.MeshBasicMaterial({ color: 0x0000ff }));
+    this.scene.add(this.debug);
   }
 
-  /* Interframe responce method */
+  /* Interframe response method */
   response () {
     this.timer.update();
 
@@ -407,13 +427,14 @@ class Drawer {
 
     // Update car latent camera
     if (this.car.done) {
-      const carGroup = this.scene.getObjectByName('car');
+      const newDbgPos = this.land.getPoint(this.car.coords.clone().add((this.car.dir2)));
+      this.debug.position.set(newDbgPos.x, newDbgPos.y, newDbgPos.z);
 
       // Handle keyboard input
       this.handleInput();
 
       // Update camera target
-      const target = carGroup.position.clone().sub(carGroup.offset);
+      const target = this.car.group.position.clone().sub(this.car.group.offset);
       this.camera.lookAt(target);
       this.controls.target.set(target.x, target.y, target.z);
       this.controls.update();
@@ -424,6 +445,11 @@ class Drawer {
     this.camera.getWorldPosition(camPos);
     this.bgMesh.position.copy(camPos);
     this.bgMesh2.position.copy(camPos);
+
+    // Put car on the landscape
+    if (this.land.done) {
+      this.car.putOnLandscape(this.land);
+    }
   }
 
   /* Render method */
