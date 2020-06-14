@@ -41,7 +41,6 @@ class Car {
     this.group = new THREE.Group();
 
     this.dir2 = new THREE.Vector2(1, 0);
-    this.dir = new THREE.Vector3(0, 1, 0);
     this.normal = new THREE.Vector3(1, 0, 0);
     this.coords = new THREE.Vector2(0, 0);
 
@@ -59,9 +58,22 @@ class Car {
   }
 
   /* Put car on landscape method */
-  putOnLandscape (land) {
-    const point = land.getPoint(this.coords);
-    this.group.position.set(point.x, point.y, point.z);
+  putOnLandscape (land, vec) {
+    const [curPoint, curNormal] = land.getPointAndNormal(this.coords);
+    const [newPoint, newNormal] = land.getPointAndNormal(vec);
+    const curDir = newPoint.clone().sub(curPoint).normalize();
+    const newDir = land.getPointAndNormal(vec.clone().add(this.dir2))[0].clone().sub(newPoint).normalize();
+    const curRight = curDir.clone().cross(curNormal).normalize();
+    const newRight = newDir.clone().cross(newNormal).normalize();
+
+    const curMatr = new THREE.Matrix4();
+    curMatr.makeBasis(curDir, curNormal, curRight);
+    const newMatr = new THREE.Matrix4();
+    newMatr.makeBasis(newDir, newNormal, newRight);
+
+    const inverseCurMatr = new THREE.Matrix4();
+    const transform = newMatr.clone().multiply(inverseCurMatr.getInverse(curMatr));
+    this.group.applyMatrix4(transform);
   }
 }
 
@@ -72,8 +84,8 @@ class Landscape extends THREE.Geometry {
     this.done = false;
   }
 
-  /* Get point world coordinates from some local landscape coordinates method */
-  getPoint (vec) {
+  /* Get point and its normal world coordinates from some local landscape coordinates method */
+  getPointAndNormal (vec) {
     var x = vec.x;
     var y = vec.y;
     while (x < 0) {
@@ -95,10 +107,20 @@ class Landscape extends THREE.Geometry {
     var p3 = this.vertices[(y + 1) % this.height * this.width + x];
     var p4 = this.vertices[(y + 1) % this.height * this.width + (x + 1) % this.width];
 
-    return p1.clone().multiplyScalar((1 - X) * (1 - Y))
+    var n1 = this.faces[2 * (y * this.width + x)].vertexNormals[0];
+    var n2 = this.faces[2 * (y * this.width + (x + 1) % this.width)].vertexNormals[0];
+    var n3 = this.faces[2 * ((y + 1) % this.height * this.width + x)].vertexNormals[0];
+    var n4 = this.faces[2 * ((y + 1) % this.height * this.width + (x + 1) % this.width)].vertexNormals[0];
+
+    const point = p1.clone().multiplyScalar((1 - X) * (1 - Y))
       .add(p2.clone().multiplyScalar(X * (1 - Y)))
       .add(p3.clone().multiplyScalar((1 - X) * Y))
       .add(p4.clone().multiplyScalar(X * Y));
+    const normal = n1.clone().multiplyScalar((1 - X) * (1 - Y))
+      .add(n2.clone().multiplyScalar(X * (1 - Y)))
+      .add(n3.clone().multiplyScalar((1 - X) * Y))
+      .add(n4.clone().multiplyScalar(X * Y)).normalize().negate();
+    return [point, normal];
   }
 
   /* Make torus geometry for landscape method */
@@ -254,10 +276,9 @@ class Drawer {
     const carObj = this.car.group.children[0].children[0].children[0];
     if (('w' in this.keyboard && this.keyboard.w) ||
         ('W' in this.keyboard && this.keyboard.W)) {
-      // this.car.group.position.add(this.car.dir.clone().multiplyScalar(this.car.velocity));
-      // this.camera.position.add(this.car.dir.clone().multiplyScalar(this.car.velocity));
-
-      this.car.coords.add(this.car.dir2.clone().multiplyScalar(this.car.velocity));
+      const offset = this.car.dir2.clone().multiplyScalar(this.car.velocity);
+      this.car.putOnLandscape(this.land, this.car.coords.clone().add(offset));
+      this.car.coords.add(offset);
 
       carObj.children[3].rotateOnAxis(new THREE.Vector3(1, 0, 0), Math.PI / 8);
       carObj.children[8].rotateOnAxis(new THREE.Vector3(1, 0, 0), Math.PI / 8);
@@ -266,10 +287,9 @@ class Drawer {
     }
     if (('s' in this.keyboard && this.keyboard.s) ||
         ('S' in this.keyboard && this.keyboard.S)) {
-      // this.car.group.position.sub(this.car.dir.clone().multiplyScalar(this.car.velocity));
-      // this.camera.position.sub(this.car.dir.clone().multiplyScalar(this.car.velocity));
-
-      this.car.coords.sub(this.car.dir2.clone().multiplyScalar(this.car.velocity));
+      const offset = this.car.dir2.clone().multiplyScalar(this.car.velocity);
+      this.car.putOnLandscape(this.land, this.car.coords.clone().sub(offset));
+      this.car.coords.sub(offset);
 
       carObj.children[3].rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI / 8);
       carObj.children[8].rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI / 8);
@@ -279,15 +299,11 @@ class Drawer {
     if (('a' in this.keyboard && this.keyboard.a) ||
         ('A' in this.keyboard && this.keyboard.A)) {
       this.car.dir2.rotateAround(new THREE.Vector2(), this.car.rotVelocity);
-      this.car.dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.car.rotVelocity);
-
       this.car.group.rotateOnAxis(new THREE.Vector3(0, 1, 0), this.car.rotVelocity);
     }
     if (('d' in this.keyboard && this.keyboard.d) ||
         ('D' in this.keyboard && this.keyboard.D)) {
       this.car.dir2.rotateAround(new THREE.Vector2(), -this.car.rotVelocity);
-      this.car.dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), -this.car.rotVelocity);
-
       this.car.group.rotateOnAxis(new THREE.Vector3(0, 1, 0), -this.car.rotVelocity);
     }
   }
@@ -404,6 +420,9 @@ class Drawer {
       this.car.group.add(lights);
 
       this.camera.position.set(152, 13, 0);
+      this.car.group.rotateZ(-Math.PI / 2);
+      const initPos = this.land.getPointAndNormal(new THREE.Vector2(0, 0))[0];
+      this.car.group.position.set(initPos.x, initPos.y, initPos.z);
       this.scene.add(this.car.group);
       this.car.done = true;
     });
@@ -425,9 +444,8 @@ class Drawer {
     hem.intensity = 0.2 + 0.3 * Math.sin(this.timer.time * (2 * Math.PI) / 30);
     this.bgMesh2.material.opacity = 0.5 - 0.5 * (Math.sin(this.timer.time * (2 * Math.PI) / 30 + 1) / 2);
 
-    // Update car latent camera
-    if (this.car.done) {
-      const newDbgPos = this.land.getPoint(this.car.coords.clone().add((this.car.dir2)));
+    if (this.car.done && this.land.done) {
+      const newDbgPos = this.land.getPointAndNormal(this.car.coords.clone().add((this.car.dir2.clone().multiplyScalar(3))))[0];
       this.debug.position.set(newDbgPos.x, newDbgPos.y, newDbgPos.z);
 
       // Handle keyboard input
@@ -445,11 +463,6 @@ class Drawer {
     this.camera.getWorldPosition(camPos);
     this.bgMesh.position.copy(camPos);
     this.bgMesh2.position.copy(camPos);
-
-    // Put car on the landscape
-    if (this.land.done) {
-      this.car.putOnLandscape(this.land);
-    }
   }
 
   /* Render method */
