@@ -29,8 +29,8 @@ module.exports = {
       {
         test: /\.css$/,
         use: [
-            MiniCssExtractPlugin.loader,
-            'css-loader'
+          MiniCssExtractPlugin.loader,
+          'css-loader'
         ]
       },
       {
@@ -54,8 +54,8 @@ module.exports = {
       output: './version.txt',
       data: {
         date: (new Date()).toDateString() + ' ' + [(((new Date()).getHours() < 10) ? '0' : '') + (new Date()).getHours().toString(),
-                                                   (((new Date()).getMinutes() < 10) ? '0' : '') + (new Date()).getMinutes().toString(),
-                                                   (((new Date()).getSeconds() < 10) ? '0' : '') + (new Date()).getSeconds().toString()].join(':')
+          (((new Date()).getMinutes() < 10) ? '0' : '') + (new Date()).getMinutes().toString(),
+          (((new Date()).getSeconds() < 10) ? '0' : '') + (new Date()).getSeconds().toString()].join(':')
       },
       template: './version.ejs'
     })

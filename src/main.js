@@ -41,14 +41,12 @@ class Car {
     this.group = new THREE.Group();
 
     this.dir2 = new THREE.Vector2(1, 0);
-    this.normal = new THREE.Vector3(1, 0, 0);
     this.coords = new THREE.Vector2(0, 0);
 
     this.done = false;
 
     this.velocity = 0.5;
     this.rotVelocity = Math.PI / 75;
-    this.cameraDistance = 10;
   }
 
   /* Load car model method */
@@ -119,7 +117,7 @@ class Landscape extends THREE.Geometry {
     const normal = n1.clone().multiplyScalar((1 - X) * (1 - Y))
       .add(n2.clone().multiplyScalar(X * (1 - Y)))
       .add(n3.clone().multiplyScalar((1 - X) * Y))
-      .add(n4.clone().multiplyScalar(X * Y)).normalize().negate();
+      .add(n4.clone().multiplyScalar(X * Y)).negate().normalize();
     return [point, normal];
   }
 
@@ -275,7 +273,9 @@ class Drawer {
   handleInput () {
     const carObj = this.car.group.children[0].children[0].children[0];
     if (('w' in this.keyboard && this.keyboard.w) ||
-        ('W' in this.keyboard && this.keyboard.W)) {
+        ('W' in this.keyboard && this.keyboard.W) ||
+        ('ц' in this.keyboard && this.keyboard.ц) ||
+        ('Ц' in this.keyboard && this.keyboard.Ц)) {
       const offset = this.car.dir2.clone().multiplyScalar(this.car.velocity);
       this.car.putOnLandscape(this.land, this.car.coords.clone().add(offset));
       this.car.coords.add(offset);
@@ -286,7 +286,9 @@ class Drawer {
       carObj.children[9].rotateOnAxis(new THREE.Vector3(1, 0, 0), Math.PI / 8);
     }
     if (('s' in this.keyboard && this.keyboard.s) ||
-        ('S' in this.keyboard && this.keyboard.S)) {
+        ('S' in this.keyboard && this.keyboard.S) ||
+        ('ы' in this.keyboard && this.keyboard.ы) ||
+        ('Ы' in this.keyboard && this.keyboard.Ы)) {
       const offset = this.car.dir2.clone().multiplyScalar(this.car.velocity);
       this.car.putOnLandscape(this.land, this.car.coords.clone().sub(offset));
       this.car.coords.sub(offset);
@@ -297,13 +299,17 @@ class Drawer {
       carObj.children[9].rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI / 8);
     }
     if (('a' in this.keyboard && this.keyboard.a) ||
-        ('A' in this.keyboard && this.keyboard.A)) {
-      this.car.dir2.rotateAround(new THREE.Vector2(), this.car.rotVelocity);
+        ('A' in this.keyboard && this.keyboard.A) ||
+        ('ф' in this.keyboard && this.keyboard.ф) ||
+        ('Ф' in this.keyboard && this.keyboard.Ф)) {
+      this.car.dir2.rotateAround(new THREE.Vector2(0, 0), this.car.rotVelocity);
       this.car.group.rotateOnAxis(new THREE.Vector3(0, 1, 0), this.car.rotVelocity);
     }
     if (('d' in this.keyboard && this.keyboard.d) ||
-        ('D' in this.keyboard && this.keyboard.D)) {
-      this.car.dir2.rotateAround(new THREE.Vector2(), -this.car.rotVelocity);
+        ('D' in this.keyboard && this.keyboard.D) ||
+        ('в' in this.keyboard && this.keyboard.в) ||
+        ('В' in this.keyboard && this.keyboard.В)) {
+      this.car.dir2.rotateAround(new THREE.Vector2(0, 0), -this.car.rotVelocity);
       this.car.group.rotateOnAxis(new THREE.Vector3(0, 1, 0), -this.car.rotVelocity);
     }
   }
@@ -426,8 +432,10 @@ class Drawer {
       this.scene.add(this.car.group);
       this.car.done = true;
     });
-    this.debug = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 10), new THREE.MeshBasicMaterial({ color: 0x0000ff }));
-    this.scene.add(this.debug);
+    this.debug1 = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 10), new THREE.MeshBasicMaterial({ color: 0x0000ff }));
+    this.scene.add(this.debug1);
+    this.debug2 = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 10), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+    this.scene.add(this.debug2);
   }
 
   /* Interframe response method */
@@ -445,8 +453,10 @@ class Drawer {
     this.bgMesh2.material.opacity = 0.5 - 0.5 * (Math.sin(this.timer.time * (2 * Math.PI) / 30 + 1) / 2);
 
     if (this.car.done && this.land.done) {
-      const newDbgPos = this.land.getPointAndNormal(this.car.coords.clone().add((this.car.dir2.clone().multiplyScalar(3))))[0];
-      this.debug.position.set(newDbgPos.x, newDbgPos.y, newDbgPos.z);
+      const newDbg1Pos = this.land.getPointAndNormal(this.car.coords.clone().add((this.car.dir2.clone().multiplyScalar(3))))[0];
+      this.debug1.position.set(newDbg1Pos.x, newDbg1Pos.y, newDbg1Pos.z);
+      const newDbg2Pos = this.land.getPointAndNormal(this.car.coords.clone())[0];
+      this.debug2.position.set(newDbg2Pos.x, newDbg2Pos.y, newDbg2Pos.z);
 
       // Handle keyboard input
       this.handleInput();
