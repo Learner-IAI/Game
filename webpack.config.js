@@ -8,7 +8,7 @@ module.exports = {
   entry: './src/main.js',
   output: {
     filename: 'index-bundles.js',
-    path: path.resolve(__dirname, 'dist')
+    path: path.resolve(__dirname, 'build')
   },
   devtool: 'source-map',
   module: {
