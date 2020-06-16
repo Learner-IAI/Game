@@ -19,6 +19,7 @@ import hash from '../hash.txt';
 
 /* Webpack build date import */
 import date from '../version.txt';
+import { Matrix4 } from 'three';
 
 /* Timer representation class */
 class Timer {
@@ -57,21 +58,22 @@ class Car {
 
   /* Put car on landscape method */
   putOnLandscape (land, vec) {
-    const [curPoint, curNormal] = land.getPointAndNormal(this.coords);
-    const [newPoint, newNormal] = land.getPointAndNormal(vec);
-    const curDir = newPoint.clone().sub(curPoint).normalize();
-    const newDir = land.getPointAndNormal(vec.clone().add(this.dir2))[0].clone().sub(newPoint).normalize();
-    const curRight = curDir.clone().cross(curNormal).normalize();
-    const newRight = newDir.clone().cross(newNormal).normalize();
+    const curPosition = land.getPoint(this.coords);
+    const curNormal = land.getNormal(this.coords);
+    const curPlane1 = (new THREE.Vector3(curPosition.x, 0, curPosition.z)).cross(new THREE.Vector3(0, 1, 0)).normalize();
+    const curPlane2 = curNormal.clone().cross(curPlane1).normalize();
+    const curMatrix = new THREE.Matrix4().makeBasis(curPlane1, curNormal, curPlane2);
 
-    const curMatr = new THREE.Matrix4();
-    curMatr.makeBasis(curDir, curNormal, curRight);
-    const newMatr = new THREE.Matrix4();
-    newMatr.makeBasis(newDir, newNormal, newRight);
+    const newPosition = land.getPoint(vec);
+    const newNormal = land.getNormal(vec);
+    const newPlane1 = (new THREE.Vector3(newPosition.x, 0, newPosition.z)).cross(new THREE.Vector3(0, 1, 0)).normalize();
+    const newPlane2 = newNormal.clone().cross(newPlane1).normalize();
+    const newMatrix = new THREE.Matrix4().makeBasis(newPlane1, newNormal, newPlane2);
+    const inverseNewMatrix = new Matrix4().getInverse(newMatrix);
 
-    const inverseCurMatr = new THREE.Matrix4();
-    const transform = newMatr.clone().multiply(inverseCurMatr.getInverse(curMatr));
-    this.group.applyMatrix4(transform);
+    const transform = curMatrix.clone().multiply(inverseNewMatrix);
+    this.group.applyMatrix4(transform.getInverse(transform));
+    this.group.position.set(newPosition.x, newPosition.y, newPosition.z);
   }
 }
 
@@ -82,10 +84,10 @@ class Landscape extends THREE.Geometry {
     this.done = false;
   }
 
-  /* Get point and its normal world coordinates from some local landscape coordinates method */
-  getPointAndNormal (vec) {
-    var x = vec.x;
-    var y = vec.y;
+  /* Get point coordinates from some local landscape coordinates method */
+  getPoint (vec) {
+    let x = vec.x;
+    let y = vec.y;
     while (x < 0) {
       x += this.width;
     }
@@ -100,25 +102,46 @@ class Landscape extends THREE.Geometry {
     x = Math.floor(x);
     y = Math.floor(y);
 
-    var p1 = this.vertices[y * this.width + x];
-    var p2 = this.vertices[y * this.width + (x + 1) % this.width];
-    var p3 = this.vertices[(y + 1) % this.height * this.width + x];
-    var p4 = this.vertices[(y + 1) % this.height * this.width + (x + 1) % this.width];
-
-    var n1 = this.faces[2 * (y * this.width + x)].vertexNormals[0];
-    var n2 = this.faces[2 * (y * this.width + (x + 1) % this.width)].vertexNormals[0];
-    var n3 = this.faces[2 * ((y + 1) % this.height * this.width + x)].vertexNormals[0];
-    var n4 = this.faces[2 * ((y + 1) % this.height * this.width + (x + 1) % this.width)].vertexNormals[0];
+    const p1 = this.vertices[y * this.width + x];
+    const p2 = this.vertices[y * this.width + (x + 1) % this.width];
+    const p3 = this.vertices[(y + 1) % this.height * this.width + x];
+    const p4 = this.vertices[(y + 1) % this.height * this.width + (x + 1) % this.width];
 
     const point = p1.clone().multiplyScalar((1 - X) * (1 - Y))
       .add(p2.clone().multiplyScalar(X * (1 - Y)))
       .add(p3.clone().multiplyScalar((1 - X) * Y))
       .add(p4.clone().multiplyScalar(X * Y));
+    return point;
+  }
+
+  /* Get normal coordinates from some local landscape coordinates method */
+  getNormal (vec) {
+    let x = vec.x;
+    let y = vec.y;
+    while (x < 0) {
+      x += this.width;
+    }
+    while (y < 0) {
+      y += this.height;
+    }
+    x %= this.width;
+    y %= this.height;
+
+    const X = x - Math.floor(x);
+    const Y = y - Math.floor(y);
+    x = Math.floor(x);
+    y = Math.floor(y);
+
+    const n1 = this.faces[2 * (y * this.width + x)].vertexNormals[0];
+    const n2 = this.faces[2 * (y * this.width + (x + 1) % this.width)].vertexNormals[0];
+    const n3 = this.faces[2 * ((y + 1) % this.height * this.width + x)].vertexNormals[0];
+    const n4 = this.faces[2 * ((y + 1) % this.height * this.width + (x + 1) % this.width)].vertexNormals[0];
+
     const normal = n1.clone().multiplyScalar((1 - X) * (1 - Y))
       .add(n2.clone().multiplyScalar(X * (1 - Y)))
       .add(n3.clone().multiplyScalar((1 - X) * Y))
       .add(n4.clone().multiplyScalar(X * Y)).negate().normalize();
-    return [point, normal];
+    return normal;
   }
 
   /* Make torus geometry for landscape method */
@@ -175,7 +198,7 @@ class Landscape extends THREE.Geometry {
   }
 
   /* Load and apply height map of the landscape method */
-  loadHeightMap (heightMapUrl, deferredFunc) {
+  loadHeightMap (heightMapUrl, callback) {
     const imgLoader = new THREE.ImageLoader();
     const handleImageData = (image) => {
       const ctx = document.createElement('canvas').getContext('2d');
@@ -188,13 +211,15 @@ class Landscape extends THREE.Geometry {
       this.width = width;
       this.height = height;
       this.makeTorus(this.width, this.height);
+      /*
       for (let y = 0; y < this.height; y++) {
         for (let x = 0; x < this.width; x++) {
           this.setTorusHeight(x, y, data[(y * this.width + x) * 4] / 255 * 0.1);
         }
       }
+      */
       this.computeVertexNormals();
-      deferredFunc();
+      callback();
       this.done = true;
     };
     imgLoader.load(heightMapUrl, handleImageData);
@@ -427,7 +452,7 @@ class Drawer {
 
       this.camera.position.set(152, 13, 0);
       this.car.group.rotateZ(-Math.PI / 2);
-      const initPos = this.land.getPointAndNormal(new THREE.Vector2(0, 0))[0];
+      const initPos = this.land.getPoint(new THREE.Vector2(0, 0));
       this.car.group.position.set(initPos.x, initPos.y, initPos.z);
       this.scene.add(this.car.group);
       this.car.done = true;
@@ -453,9 +478,9 @@ class Drawer {
     this.bgMesh2.material.opacity = 0.5 - 0.5 * (Math.sin(this.timer.time * (2 * Math.PI) / 30 + 1) / 2);
 
     if (this.car.done && this.land.done) {
-      const newDbg1Pos = this.land.getPointAndNormal(this.car.coords.clone().add((this.car.dir2.clone().multiplyScalar(3))))[0];
+      const newDbg1Pos = this.land.getPoint(this.car.coords.clone().add((this.car.dir2.clone().multiplyScalar(3))));
       this.debug1.position.set(newDbg1Pos.x, newDbg1Pos.y, newDbg1Pos.z);
-      const newDbg2Pos = this.land.getPointAndNormal(this.car.coords.clone())[0];
+      const newDbg2Pos = this.land.getPoint(this.car.coords.clone());
       this.debug2.position.set(newDbg2Pos.x, newDbg2Pos.y, newDbg2Pos.z);
 
       // Handle keyboard input
