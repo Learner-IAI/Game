@@ -35,8 +35,110 @@ class Timer {
   }
 }
 
-/* 'Epsilon' constant for little offsets */
-const EPS = 0.01;
+/* Particle representation class */
+class Particle {
+  constructor (position, velocity, maxLifespan, texture, initFunction, changeFunction, parent) {
+    this._sprite = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: texture
+      })
+    );
+    this._sprite.scale.set(2, 2, 2);
+    this.position = position.clone();
+    this.velocity = velocity.clone();
+
+    this._birthTime = Date.now();
+    this.lifespan = 0; // In seconds
+    this.maxLifespan = maxLifespan; // In seconds
+    this.mustDie = false;
+
+    initFunction instanceof Function && initFunction.call(this);
+    this.changeFunction = changeFunction;
+
+    parent.add(this._sprite);
+  }
+
+  // Remove particle mesh from object method
+  removeFrom (obj) {
+    obj.remove(this._sprite);
+  }
+
+  // Handle particle behaviour method
+  handle () {
+    this.lifespan = (Date.now() - this._birthTime) / 1000;
+    if (this.lifespan > this.maxLifespan) {
+      this.mustDie = true;
+      return;
+    }
+    this.changeFunction && this.changeFunction();
+
+    this._sprite.position.set(this.position.x, this.position.y, this.position.z);
+  }
+}
+
+/* Particle emitter representation class */
+class Emitter extends THREE.Object3D {
+  constructor (position, interval, particleVelocity, maxParticleLifespan, textureURL, particleInitFunction, particleChangeFunction) {
+    super();
+    this.position.set(position.x, position.y, position.z);
+    this.interval = interval;
+
+    this.maxParticleLifespan = maxParticleLifespan;
+    this.particleVelocity = particleVelocity;
+    this.particleQueue = [];
+
+    const loader = new THREE.TextureLoader();
+    const texture = loader.load(textureURL);
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearFilter;
+    this.particleTexture = texture;
+
+    this.particleInitFunction = particleInitFunction;
+    this.particleChangeFunction = particleChangeFunction;
+
+    this.active = false;
+  }
+
+  // Activate emitter function
+  activate () {
+    const emit = () => this.emit();
+    this.intervalId = setInterval(emit, this.interval * 1000);
+    this.active = true;
+  }
+
+  // Deactivate emitter function
+  deactivate () {
+    clearInterval(this.intervalId);
+    this.active = false;
+  }
+
+  // Emit one new particle method
+  emit () {
+    this.particleQueue.push(new Particle(
+      this.position,
+      this.particleVelocity,
+      this.maxParticleLifespan,
+      this.particleTexture,
+      this.particleInitFunction,
+      this.particleChangeFunction,
+      this
+    ));
+  }
+
+  // Handle all particles behaviour method
+  handleParticles () {
+    let ind;
+    for (ind in this.particleQueue) {
+      const p = this.particleQueue[ind];
+      if (p.mustDie) {
+        p.removeFrom(this);
+        this.particleQueue.splice(ind, 1);
+        continue;
+      }
+      p.handle();
+    }
+  }
+}
 
 /* Car representation class */
 class Car {
@@ -52,6 +154,8 @@ class Car {
     this.camVec = new THREE.Vector3(20, 10, 1.5);
 
     this.done = false;
+
+    this.emitters = [];
   }
 
   /* Load car model method */
@@ -62,38 +166,45 @@ class Car {
 
   /* Put car on landscape method */
   putOnLandscape (land, vec) {
+    const EPS = 0.01;
+
     let H1;
     let H2;
 
+    // Current matrices evaluation
     const [curPosition, curHeight] = [land.getPoint(this.coords), land.getHeight(this.coords)];
 
     H1 = new THREE.Vector3(EPS, land.getHeight(new THREE.Vector2(this.coords.x + EPS, this.coords.y)) - curHeight, 0);
     H2 = new THREE.Vector3(0, land.getHeight(new THREE.Vector2(this.coords.x, this.coords.y + EPS)) - curHeight, EPS);
 
-    const curNormal = land.getNormal(this.coords);
     const curNormal1 = H1.clone().cross(H2).normalize();
-    const curTangent = (new THREE.Vector3(curPosition.x, 0, curPosition.z)).cross(new THREE.Vector3(0, 1, 0)).normalize();
-    const curTangent1 = H1.clone().cross(curNormal).normalize();
-    const curBitangent = curNormal.clone().cross(curTangent).normalize();
-    const curBitangent1 = curNormal.clone().cross(curTangent).normalize();
+    const curTangent1 = H1.clone().cross(curNormal1).normalize();
+    const curBitangent1 = curNormal1.clone().cross(curTangent1).normalize();
     const curMatrix1 = new THREE.Matrix4().makeBasis(curTangent1, curNormal1, curBitangent1);
+
+    const curNormal = land.getNormal(this.coords);
+    const curTangent = (new THREE.Vector3(curPosition.x, 0, curPosition.z)).cross(new THREE.Vector3(0, 1, 0)).normalize();
+    const curBitangent = curNormal.clone().cross(curTangent).normalize();
     const curMatrix = new THREE.Matrix4().makeBasis(curTangent, curNormal, curBitangent).multiply(curMatrix1);
     const inverseCurMatrix = new THREE.Matrix4().getInverse(curMatrix);
 
+    // New matrices evaluation
     const [newPosition, newHeight] = [land.getPoint(vec), land.getHeight(vec)];
 
     H1 = new THREE.Vector3(EPS, land.getHeight(new THREE.Vector2(vec.x + EPS, vec.y)) - newHeight, 0);
     H2 = new THREE.Vector3(0, land.getHeight(new THREE.Vector2(vec.x, vec.y + EPS)) - newHeight, EPS);
 
-    const newNormal = land.getNormal(vec);
     const newNormal1 = H1.clone().cross(H2).normalize();
-    const newTangent = (new THREE.Vector3(newPosition.x, 0, newPosition.z)).cross(new THREE.Vector3(0, 1, 0)).normalize();
-    const newTangent1 = H1.clone().cross(newNormal).normalize();
-    const newBitangent = newNormal.clone().cross(newTangent).normalize();
-    const newBitangent1 = newNormal.clone().cross(newTangent).normalize();
+    const newTangent1 = H1.clone().cross(newNormal1).normalize();
+    const newBitangent1 = newNormal1.clone().cross(newTangent1).normalize();
     const newMatrix1 = new THREE.Matrix4().makeBasis(newTangent1, newNormal1, newBitangent1);
+
+    const newNormal = land.getNormal(vec);
+    const newTangent = (new THREE.Vector3(newPosition.x, 0, newPosition.z)).cross(new THREE.Vector3(0, 1, 0)).normalize();
+    const newBitangent = newNormal.clone().cross(newTangent).normalize();
     const newMatrix = new THREE.Matrix4().makeBasis(newTangent, newNormal, newBitangent).multiply(newMatrix1);
 
+    // Transform matrix evaluation and applyment
     const transform = newMatrix.clone().multiply(inverseCurMatrix);
     this.group.applyMatrix4(transform);
     newPosition.add(newNormal);
@@ -264,15 +375,15 @@ class Landscape extends THREE.Geometry {
 
       this.width = width;
       this.height = height;
-      this.heights = [];
+      this.heights = [].fill(0);
       this.makeTorus(this.width, this.height);
       for (let y = 0; y < this.height; y++) {
         for (let x = 0; x < this.width; x++) {
           /*
           const h = data[(y * this.width + x) * 4] / 255 * 0.1;
           this.setTorusHeight(x, y, h);
+          this.heights[y * this.width + x] = h;
           */
-          this.heights.push(0/* h */);
         }
       }
       this.computeVertexNormals();
@@ -531,8 +642,24 @@ class Drawer {
       this.car.group.rotateZ(-Math.PI / 2);
       const initPos = this.land.getPoint(new THREE.Vector2(0, 0));
       this.car.group.position.set(initPos.x + 0.5, initPos.y, initPos.z);
-      this.camera.position.set(initPos.x + 80.5, initPos.y + 26, initPos.z);
+      this.camera.position.set(initPos.x + 80, initPos.y + 26, initPos.z);
       this.scene.add(this.car.group);
+
+      const positions = [new THREE.Vector3(1.9, -0.3, 0.1), new THREE.Vector3(1.9, -0.3, 1.4)];
+      for (let i = 0; i < positions.length; i++) {
+        const emitter = new Emitter(
+          positions[i], 0.5, new THREE.Vector3(0.1, 0, 0), 1, '../bin/eye.png',
+          null,
+          function () {
+            this._sprite.material.setValues({ opacity: 1 - this.lifespan / this.maxLifespan });
+            this.position.add(this.velocity);
+          }
+        );
+        this.car.emitters.push(emitter);
+        emitter.activate();
+        this.car.group.add(emitter);
+      }
+
       this.car.done = true;
     });
   }
@@ -560,6 +687,12 @@ class Drawer {
       this.camera.lookAt(target);
       this.controls.target.set(target.x, target.y, target.z);
       this.controls.update();
+
+      // Update dust emitters
+      let emitter;
+      for (emitter of this.car.emitters) {
+        emitter.handleParticles();
+      }
     }
 
     // Update skybox position
