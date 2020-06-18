@@ -610,6 +610,7 @@ class Drawer {
       this.car.group.position.add(new THREE.Vector3(0, 25, 0));
       this.car.group.offset = offset;
 
+      // Lights
       const lights = new THREE.Group();
 
       const leftLight = new THREE.SpotLight(0xffffff, 1, 100, Math.PI / 6, 0.5);
@@ -645,11 +646,18 @@ class Drawer {
       this.camera.position.set(initPos.x + 80, initPos.y + 26, initPos.z);
       this.scene.add(this.car.group);
 
+      // Dust emitters
       const positions = [new THREE.Vector3(1.9, -0.3, 0.1), new THREE.Vector3(1.9, -0.3, 1.4)];
       for (let i = 0; i < positions.length; i++) {
         const emitter = new Emitter(
-          positions[i], 0.5, new THREE.Vector3(0.1, 0, 0), 1, '../bin/eye.png',
-          null,
+          positions[i], 0.1, new THREE.Vector3(0.1, 0, 0), 1, '../bin/dust.png',
+          function () {
+            this.velocity.add(new THREE.Vector3(
+              0,
+              (Math.random() * 2 - 1) / 2,
+              (Math.random() * 2 - 1) / 2
+            ).multiplyScalar(0.1)).normalize().multiplyScalar(0.1);
+          },
           function () {
             this._sprite.material.setValues({ opacity: 1 - this.lifespan / this.maxLifespan });
             this.position.add(this.velocity);

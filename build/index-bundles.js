@@ -95,7 +95,7 @@
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony default export */ __webpack_exports__["default"] = ("28020d145f143a973292d0012cb1cfbc6139bf62");
+/* harmony default export */ __webpack_exports__["default"] = ("8c35d4f885f64c4621fd6e2204e3d07aeb77b945");
 
 /***/ }),
 
@@ -56074,7 +56074,6 @@ __webpack_require__.r(__webpack_exports__);
 /* Webpack build date import */
 
 
-
 /* Timer representation class */
 
 class Timer {
@@ -56092,6 +56091,108 @@ class Timer {
   }
 
 }
+/* Particle representation class */
+
+
+class Particle {
+  constructor(position, velocity, maxLifespan, texture, initFunction, changeFunction, parent) {
+    this._sprite = new three__WEBPACK_IMPORTED_MODULE_1__["Sprite"](new three__WEBPACK_IMPORTED_MODULE_1__["SpriteMaterial"]({
+      map: texture
+    }));
+
+    this._sprite.scale.set(2, 2, 2);
+
+    this.position = position.clone();
+    this.velocity = velocity.clone();
+    this._birthTime = Date.now();
+    this.lifespan = 0; // In seconds
+
+    this.maxLifespan = maxLifespan; // In seconds
+
+    this.mustDie = false;
+    initFunction instanceof Function && initFunction.call(this);
+    this.changeFunction = changeFunction;
+    parent.add(this._sprite);
+  } // Remove particle mesh from object method
+
+
+  removeFrom(obj) {
+    obj.remove(this._sprite);
+  } // Handle particle behaviour method
+
+
+  handle() {
+    this.lifespan = (Date.now() - this._birthTime) / 1000;
+
+    if (this.lifespan > this.maxLifespan) {
+      this.mustDie = true;
+      return;
+    }
+
+    this.changeFunction && this.changeFunction();
+
+    this._sprite.position.set(this.position.x, this.position.y, this.position.z);
+  }
+
+}
+/* Particle emitter representation class */
+
+
+class Emitter extends three__WEBPACK_IMPORTED_MODULE_1__["Object3D"] {
+  constructor(position, interval, particleVelocity, maxParticleLifespan, textureURL, particleInitFunction, particleChangeFunction) {
+    super();
+    this.position.set(position.x, position.y, position.z);
+    this.interval = interval;
+    this.maxParticleLifespan = maxParticleLifespan;
+    this.particleVelocity = particleVelocity;
+    this.particleQueue = [];
+    const loader = new three__WEBPACK_IMPORTED_MODULE_1__["TextureLoader"]();
+    const texture = loader.load(textureURL);
+    texture.magFilter = three__WEBPACK_IMPORTED_MODULE_1__["LinearFilter"];
+    texture.minFilter = three__WEBPACK_IMPORTED_MODULE_1__["LinearFilter"];
+    this.particleTexture = texture;
+    this.particleInitFunction = particleInitFunction;
+    this.particleChangeFunction = particleChangeFunction;
+    this.active = false;
+  } // Activate emitter function
+
+
+  activate() {
+    const emit = () => this.emit();
+
+    this.intervalId = setInterval(emit, this.interval * 1000);
+    this.active = true;
+  } // Deactivate emitter function
+
+
+  deactivate() {
+    clearInterval(this.intervalId);
+    this.active = false;
+  } // Emit one new particle method
+
+
+  emit() {
+    this.particleQueue.push(new Particle(this.position, this.particleVelocity, this.maxParticleLifespan, this.particleTexture, this.particleInitFunction, this.particleChangeFunction, this));
+  } // Handle all particles behaviour method
+
+
+  handleParticles() {
+    let ind;
+
+    for (ind in this.particleQueue) {
+      const p = this.particleQueue[ind];
+
+      if (p.mustDie) {
+        p.removeFrom(this);
+        this.particleQueue.splice(ind, 1);
+        continue;
+      }
+
+      p.handle();
+    }
+  }
+
+}
 /* Car representation class */
 
 
@@ -56100,9 +56201,11 @@ class Car {
     this.group = new three__WEBPACK_IMPORTED_MODULE_1__["Group"]();
     this.dir2 = new three__WEBPACK_IMPORTED_MODULE_1__["Vector2"](1, 0);
     this.coords = new three__WEBPACK_IMPORTED_MODULE_1__["Vector2"](0, 0);
-    this.done = false;
     this.velocity = 0.5;
     this.rotVelocity = Math.PI / 75;
+    this.camVec = new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](20, 10, 1.5);
+    this.done = false;
+    this.emitters = [];
   }
   /* Load car model method */
 
@@ -56115,19 +56218,38 @@ class Car {
 
 
   putOnLandscape(land, vec) {
-    const curPosition = land.getPoint(this.coords);
+    const EPS = 0.01;
+    let H1;
+    let H2; // Current matrices evaluation
+
+    const [curPosition, curHeight] = [land.getPoint(this.coords), land.getHeight(this.coords)];
+    H1 = new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](EPS, land.getHeight(new three__WEBPACK_IMPORTED_MODULE_1__["Vector2"](this.coords.x + EPS, this.coords.y)) - curHeight, 0);
+    H2 = new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](0, land.getHeight(new three__WEBPACK_IMPORTED_MODULE_1__["Vector2"](this.coords.x, this.coords.y + EPS)) - curHeight, EPS);
+    const curNormal1 = H1.clone().cross(H2).normalize();
+    const curTangent1 = H1.clone().cross(curNormal1).normalize();
+    const curBitangent1 = curNormal1.clone().cross(curTangent1).normalize();
+    const curMatrix1 = new three__WEBPACK_IMPORTED_MODULE_1__["Matrix4"]().makeBasis(curTangent1, curNormal1, curBitangent1);
     const curNormal = land.getNormal(this.coords);
-    const curPlane1 = new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](curPosition.x, 0, curPosition.z).cross(new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](0, 1, 0)).normalize();
-    const curPlane2 = curNormal.clone().cross(curPlane1).normalize();
-    const curMatrix = new three__WEBPACK_IMPORTED_MODULE_1__["Matrix4"]().makeBasis(curPlane1, curNormal, curPlane2);
-    const newPosition = land.getPoint(vec);
+    const curTangent = new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](curPosition.x, 0, curPosition.z).cross(new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](0, 1, 0)).normalize();
+    const curBitangent = curNormal.clone().cross(curTangent).normalize();
+    const curMatrix = new three__WEBPACK_IMPORTED_MODULE_1__["Matrix4"]().makeBasis(curTangent, curNormal, curBitangent).multiply(curMatrix1);
+    const inverseCurMatrix = new three__WEBPACK_IMPORTED_MODULE_1__["Matrix4"]().getInverse(curMatrix); // New matrices evaluation
+
+    const [newPosition, newHeight] = [land.getPoint(vec), land.getHeight(vec)];
+    H1 = new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](EPS, land.getHeight(new three__WEBPACK_IMPORTED_MODULE_1__["Vector2"](vec.x + EPS, vec.y)) - newHeight, 0);
+    H2 = new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](0, land.getHeight(new three__WEBPACK_IMPORTED_MODULE_1__["Vector2"](vec.x, vec.y + EPS)) - newHeight, EPS);
+    const newNormal1 = H1.clone().cross(H2).normalize();
+    const newTangent1 = H1.clone().cross(newNormal1).normalize();
+    const newBitangent1 = newNormal1.clone().cross(newTangent1).normalize();
+    const newMatrix1 = new three__WEBPACK_IMPORTED_MODULE_1__["Matrix4"]().makeBasis(newTangent1, newNormal1, newBitangent1);
     const newNormal = land.getNormal(vec);
-    const newPlane1 = new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](newPosition.x, 0, newPosition.z).cross(new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](0, 1, 0)).normalize();
-    const newPlane2 = newNormal.clone().cross(newPlane1).normalize();
-    const newMatrix = new three__WEBPACK_IMPORTED_MODULE_1__["Matrix4"]().makeBasis(newPlane1, newNormal, newPlane2);
-    const inverseNewMatrix = new three__WEBPACK_IMPORTED_MODULE_1__["Matrix4"]().getInverse(newMatrix);
-    const transform = curMatrix.clone().multiply(inverseNewMatrix);
-    this.group.applyMatrix4(transform.getInverse(transform));
+    const newTangent = new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](newPosition.x, 0, newPosition.z).cross(new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](0, 1, 0)).normalize();
+    const newBitangent = newNormal.clone().cross(newTangent).normalize();
+    const newMatrix = new three__WEBPACK_IMPORTED_MODULE_1__["Matrix4"]().makeBasis(newTangent, newNormal, newBitangent).multiply(newMatrix1); // Transform matrix evaluation and applyment
+
+    const transform = newMatrix.clone().multiply(inverseCurMatrix);
+    this.group.applyMatrix4(transform);
+    newPosition.add(newNormal);
     this.group.position.set(newPosition.x, newPosition.y, newPosition.z);
   }
 
@@ -56167,6 +56289,34 @@ class Landscape extends three__WEBPACK_IMPORTED_MODULE_1__["Geometry"] {
     const p4 = this.vertices[(y + 1) % this.height * this.width + (x + 1) % this.width];
     const point = p1.clone().multiplyScalar((1 - X) * (1 - Y)).add(p2.clone().multiplyScalar(X * (1 - Y))).add(p3.clone().multiplyScalar((1 - X) * Y)).add(p4.clone().multiplyScalar(X * Y));
     return point;
+  }
+  /* Get height from some local landscape coordinates method */
+
+
+  getHeight(vec) {
+    let x = vec.x;
+    let y = vec.y;
+
+    while (x < 0) {
+      x += this.width;
+    }
+
+    while (y < 0) {
+      y += this.height;
+    }
+
+    x %= this.width;
+    y %= this.height;
+    const X = x - Math.floor(x);
+    const Y = y - Math.floor(y);
+    x = Math.floor(x);
+    y = Math.floor(y);
+    const h1 = this.heights[y * this.width + x];
+    const h2 = this.heights[y * this.width + (x + 1) % this.width];
+    const h3 = this.heights[(y + 1) % this.height * this.width + x];
+    const h4 = this.heights[(y + 1) % this.height * this.width + (x + 1) % this.width];
+    const height = h1 * (1 - X) * (1 - Y) + h2 * X * (1 - Y) + h3 * (1 - X) * Y + h4 * X * Y;
+    return height;
   }
   /* Get normal coordinates from some local landscape coordinates method */
 
@@ -56243,14 +56393,18 @@ class Landscape extends three__WEBPACK_IMPORTED_MODULE_1__["Geometry"] {
       } = ctx.getImageData(0, 0, width, height);
       this.width = width;
       this.height = height;
+      this.heights = [].fill(0);
       this.makeTorus(this.width, this.height);
-      /*
+
       for (let y = 0; y < this.height; y++) {
         for (let x = 0; x < this.width; x++) {
-          this.setTorusHeight(x, y, data[(y * this.width + x) * 4] / 255 * 0.1);
+          /*
+          const h = data[(y * this.width + x) * 4] / 255 * 0.1;
+          this.setTorusHeight(x, y, h);
+          this.heights[y * this.width + x] = h;
+          */
         }
       }
-      */
 
       this.computeVertexNormals();
       callback();
@@ -56271,6 +56425,7 @@ class Drawer {
     this.bgScene = new three__WEBPACK_IMPORTED_MODULE_1__["Scene"]();
     this.camera = new three__WEBPACK_IMPORTED_MODULE_1__["PerspectiveCamera"](45, canvas.width / canvas.height, 0.1, 10000);
     this.camera.position.set(150, 150, 150);
+    this.camera.bound = false;
     this.controls = new three__WEBPACK_IMPORTED_MODULE_1__["OrbitControls"](this.camera, canvas);
     this.renderer = new three__WEBPACK_IMPORTED_MODULE_1__["WebGLRenderer"]({
       canvas: canvas
@@ -56281,6 +56436,7 @@ class Drawer {
     this.renderer.shadowMapSoft = true;
     this.renderer.shadowMap.type = three__WEBPACK_IMPORTED_MODULE_1__["PCFSoftShadowMap"];
     this.keyboard = {};
+    this.keyboardOld = {};
   }
   /* Add light to scene method */
 
@@ -56373,6 +56529,25 @@ class Drawer {
       this.car.dir2.rotateAround(new three__WEBPACK_IMPORTED_MODULE_1__["Vector2"](0, 0), -this.car.rotVelocity);
       this.car.group.rotateOnAxis(new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](0, 1, 0), -this.car.rotVelocity);
     }
+
+    if ('b' in this.keyboard && this.keyboard.b && !('b' in this.keyboardOld && this.keyboardOld.b) || 'B' in this.keyboard && this.keyboard.B && !('B' in this.keyboardOld && this.keyboardOld.B) || 'и' in this.keyboard && this.keyboard.и && !('и' in this.keyboardOld && this.keyboardOld.и) || 'И' in this.keyboard && this.keyboard.И && !('И' in this.keyboardOld && this.keyboardOld.И)) {
+      if (this.camera.bound) {
+        const pos = new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"]();
+        this.camera.getWorldPosition(pos);
+        this.car.group.remove(this.camera);
+        this.camera.position.set(pos.x, pos.y, pos.z);
+        this.controls.enabled = true;
+        this.controls.update();
+      } else {
+        this.car.group.add(this.camera);
+        this.camera.position.set(this.car.camVec.x, this.car.camVec.y, this.car.camVec.z);
+        this.controls.enabled = false;
+      }
+
+      this.camera.bound = !this.camera.bound;
+    }
+
+    Object.assign(this.keyboardOld, this.keyboard);
   }
   /* Initialize drawing context method */
 
@@ -56453,11 +56628,12 @@ class Drawer {
       const offset = bbox.getCenter().negate();
       this.car.group.position.set(offset.x, offset.y, offset.z);
       this.car.group.position.add(new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](0, 25, 0));
-      this.car.group.offset = offset;
+      this.car.group.offset = offset; // Lights
+
       const lights = new three__WEBPACK_IMPORTED_MODULE_1__["Group"]();
-      const leftLight = new three__WEBPACK_IMPORTED_MODULE_1__["SpotLight"](0xffffff, 1, 80, Math.PI / 8, 0.7);
+      const leftLight = new three__WEBPACK_IMPORTED_MODULE_1__["SpotLight"](0xffffff, 1, 100, Math.PI / 6, 0.5);
       leftLight.position.set(-4.2, 0.1, -0.95).sub(this.car.group.offset);
-      leftLight.target.position.set(-5, 0.1, -0.95).sub(this.car.group.offset);
+      leftLight.target.position.set(-6, -0.1, -0.95).sub(this.car.group.offset);
       lights.add(leftLight);
       lights.add(leftLight.target);
       const leftLightMesh = new three__WEBPACK_IMPORTED_MODULE_1__["Mesh"](new three__WEBPACK_IMPORTED_MODULE_1__["SphereGeometry"](0.15, 10, 10), new three__WEBPACK_IMPORTED_MODULE_1__["MeshBasicMaterial"]({
@@ -56465,9 +56641,9 @@ class Drawer {
       }));
       leftLightMesh.position.set(-4.2, 0.1, -0.95).sub(this.car.group.offset);
       lights.add(leftLightMesh);
-      const rightight = new three__WEBPACK_IMPORTED_MODULE_1__["SpotLight"](0xffffff, 1, 80, Math.PI / 8, 0.7);
+      const rightight = new three__WEBPACK_IMPORTED_MODULE_1__["SpotLight"](0xffffff, 1, 100, Math.PI / 6, 0.5);
       rightight.position.set(-4.2, 0.1, 0.95).sub(this.car.group.offset);
-      rightight.target.position.set(-5, 0.1, 0.95).sub(this.car.group.offset);
+      rightight.target.position.set(-6, -0.1, 0.95).sub(this.car.group.offset);
       lights.add(rightight);
       lights.add(rightight.target);
       const rightLightMesh = new three__WEBPACK_IMPORTED_MODULE_1__["Mesh"](new three__WEBPACK_IMPORTED_MODULE_1__["SphereGeometry"](0.15, 10, 10), new three__WEBPACK_IMPORTED_MODULE_1__["MeshBasicMaterial"]({
@@ -56477,21 +56653,31 @@ class Drawer {
       lights.add(rightLightMesh);
       this.car.group.add(root);
       this.car.group.add(lights);
-      this.camera.position.set(152, 13, 0);
       this.car.group.rotateZ(-Math.PI / 2);
       const initPos = this.land.getPoint(new three__WEBPACK_IMPORTED_MODULE_1__["Vector2"](0, 0));
-      this.car.group.position.set(initPos.x, initPos.y, initPos.z);
-      this.scene.add(this.car.group);
+      this.car.group.position.set(initPos.x + 0.5, initPos.y, initPos.z);
+      this.camera.position.set(initPos.x + 80, initPos.y + 26, initPos.z);
+      this.scene.add(this.car.group); // Dust emitters
+
+      const positions = [new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](1.9, -0.3, 0.1), new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](1.9, -0.3, 1.4)];
+
+      for (let i = 0; i < positions.length; i++) {
+        const emitter = new Emitter(positions[i], 0.1, new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](0.1, 0, 0), 1, '../bin/dust.png', function () {
+          this.velocity.add(new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](0, (Math.random() * 2 - 1) / 2, (Math.random() * 2 - 1) / 2).multiplyScalar(0.1)).normalize().multiplyScalar(0.1);
+        }, function () {
+          this._sprite.material.setValues({
+            opacity: 1 - this.lifespan / this.maxLifespan
+          });
+
+          this.position.add(this.velocity);
+        });
+        this.car.emitters.push(emitter);
+        emitter.activate();
+        this.car.group.add(emitter);
+      }
+
       this.car.done = true;
     });
-    this.debug1 = new three__WEBPACK_IMPORTED_MODULE_1__["Mesh"](new three__WEBPACK_IMPORTED_MODULE_1__["SphereGeometry"](0.5, 10, 10), new three__WEBPACK_IMPORTED_MODULE_1__["MeshBasicMaterial"]({
-      color: 0x0000ff
-    }));
-    this.scene.add(this.debug1);
-    this.debug2 = new three__WEBPACK_IMPORTED_MODULE_1__["Mesh"](new three__WEBPACK_IMPORTED_MODULE_1__["SphereGeometry"](0.5, 10, 10), new three__WEBPACK_IMPORTED_MODULE_1__["MeshBasicMaterial"]({
-      color: 0xff0000
-    }));
-    this.scene.add(this.debug2);
   }
   /* Interframe response method */
 
@@ -56508,17 +56694,19 @@ class Drawer {
     this.bgMesh2.material.opacity = 0.5 - 0.5 * (Math.sin(this.timer.time * (2 * Math.PI) / 30 + 1) / 2);
 
     if (this.car.done && this.land.done) {
-      const newDbg1Pos = this.land.getPoint(this.car.coords.clone().add(this.car.dir2.clone().multiplyScalar(3)));
-      this.debug1.position.set(newDbg1Pos.x, newDbg1Pos.y, newDbg1Pos.z);
-      const newDbg2Pos = this.land.getPoint(this.car.coords.clone());
-      this.debug2.position.set(newDbg2Pos.x, newDbg2Pos.y, newDbg2Pos.z); // Handle keyboard input
-
-      this.handleInput(); // Update camera target
+      // Handle keyboard input
+      this.handleInput(); // Update camera
 
       const target = this.car.group.position.clone().sub(this.car.group.offset);
       this.camera.lookAt(target);
       this.controls.target.set(target.x, target.y, target.z);
-      this.controls.update();
+      this.controls.update(); // Update dust emitters
+
+      let emitter;
+
+      for (emitter of this.car.emitters) {
+        emitter.handleParticles();
+      }
     } // Update skybox position
 
 
@@ -56555,6 +56743,9 @@ function threejsStart() {
   canvas.width = window.innerWidth - 40;
   drawer = new Drawer(canvas);
   drawer.init();
+  window.alert(`CONTROLS:
+   • W,A,S,D - move car;
+   • B - switch camera mode.`);
   render();
 }
 /* Keyboard input handle function */
@@ -56600,7 +56791,7 @@ document.getElementById('date').innerHTML = JSON.parse(_version_txt__WEBPACK_IMP
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony default export */ __webpack_exports__["default"] = ("{ \"date\": \"Tue Jun 16 2020 15:27:24\" }");
+/* harmony default export */ __webpack_exports__["default"] = ("{ \"date\": \"Thu Jun 18 2020 11:23:23\" }");
 
 /***/ })
 
