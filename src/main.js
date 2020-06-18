@@ -208,21 +208,24 @@ class Car {
     const H1 = new THREE.Vector3(EPS, land.getHeight(new THREE.Vector2(vec.x + EPS, vec.y)) - newHeight, 0);
     const H2 = new THREE.Vector3(0, land.getHeight(new THREE.Vector2(vec.x, vec.y + EPS)) - newHeight, EPS);
 
-    const newNormal1 = H1.clone().cross(H2).normalize();
+    const newNormal1 = H2.clone().cross(H1).normalize();
     const newTangent1 = H1.clone().cross(newNormal1).normalize();
     const newBitangent1 = newNormal1.clone().cross(newTangent1).normalize();
-    const newMatrix1 = new THREE.Matrix4().makeBasis(newTangent1, newNormal1, newBitangent1);
+    const newMatrix1 = new THREE.Matrix4().makeBasis(newBitangent1, newNormal1, newTangent1);
 
     const newNormal = land.getNormal(vec);
     const newTangent = (new THREE.Vector3(newPosition.x, 0, newPosition.z)).cross(new THREE.Vector3(0, 1, 0)).normalize();
     const newBitangent = newNormal.clone().cross(newTangent).normalize();
-    const newMatrix = new THREE.Matrix4().makeBasis(newTangent, newNormal, newBitangent).multiply(newMatrix1);
-
-    // Transform matrix evaluation and applyment
-    /* const transform = newMatrix.clone().multiply(inverseCurMatrix); */
-    this.group.matrix.set(...newMatrix.elements);/* applyMatrix4(transform); */
     newPosition.add(newNormal);
+
+    const newMatrix = new THREE.Matrix4().makeBasis(newBitangent, newNormal, newTangent).multiply(newMatrix1);
+    const np = new THREE.Vector3();
+    const nr = new THREE.Quaternion();
+    const ns = new THREE.Vector3();
+    newMatrix.decompose(np, nr, ns);
+
     this.group.position.set(newPosition.x, newPosition.y, newPosition.z);
+    this.group.setRotationFromQuaternion(nr);
   }
 }
 
@@ -665,12 +668,9 @@ class Drawer {
       this.car.group.add(root);
       this.car.group.add(lights);
 
-      /*
       this.car.group.rotateZ(-Math.PI / 2);
       const initPos = this.land.getPoint(new THREE.Vector2(0, 0));
       this.car.group.position.set(initPos.x + 0.5, initPos.y, initPos.z);
-      */
-      const initPos = this.land.getPoint(new THREE.Vector2(10, 0));
       this.car.putOnLandscape(this.land, new THREE.Vector2(0, 0));
       this.camera.position.set(initPos.x + 80, initPos.y + 26, initPos.z);
       this.scene.add(this.car.group);
