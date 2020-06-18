@@ -665,9 +665,13 @@ class Drawer {
       this.car.group.add(root);
       this.car.group.add(lights);
 
+      /*
       this.car.group.rotateZ(-Math.PI / 2);
       const initPos = this.land.getPoint(new THREE.Vector2(0, 0));
       this.car.group.position.set(initPos.x + 0.5, initPos.y, initPos.z);
+      */
+      const initPos = this.land.getPoint(new THREE.Vector2(10, 0));
+      this.car.putOnLandscape(this.land, new THREE.Vector2(0, 0));
       this.camera.position.set(initPos.x + 80, initPos.y + 26, initPos.z);
       this.scene.add(this.car.group);
 
