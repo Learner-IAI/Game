@@ -95,7 +95,7 @@
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony default export */ __webpack_exports__["default"] = ("8c35d4f885f64c4621fd6e2204e3d07aeb77b945");
+/* harmony default export */ __webpack_exports__["default"] = ("f6775d88992a1363fd1aeeba95e33f6ce6ec1942");
 
 /***/ }),
 
@@ -56158,16 +56158,20 @@ class Emitter extends three__WEBPACK_IMPORTED_MODULE_1__["Object3D"] {
 
 
   activate() {
-    const emit = () => this.emit();
+    if (!this.active) {
+      const emit = () => this.emit();
 
-    this.intervalId = setInterval(emit, this.interval * 1000);
-    this.active = true;
+      this.intervalId = setInterval(emit, this.interval * 1000);
+      this.active = true;
+    }
   } // Deactivate emitter function
 
 
   deactivate() {
-    clearInterval(this.intervalId);
-    this.active = false;
+    if (this.active) {
+      clearInterval(this.intervalId);
+      this.active = false;
+    }
   } // Emit one new particle method
 
 
@@ -56192,9 +56196,15 @@ class Emitter extends three__WEBPACK_IMPORTED_MODULE_1__["Object3D"] {
     }
   }
 
-}
-/* Car representation class */
+} // Possible car drive states
 
+
+const carStates = {
+  FORWARD: 0,
+  STAYS: 1,
+  BACKWARD: 2
+};
+/* Car representation class */
 
 class Car {
   constructor() {
@@ -56203,9 +56213,10 @@ class Car {
     this.coords = new three__WEBPACK_IMPORTED_MODULE_1__["Vector2"](0, 0);
     this.velocity = 0.5;
     this.rotVelocity = Math.PI / 75;
+    this.state = carStates.STAYS;
     this.camVec = new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](20, 10, 1.5);
-    this.done = false;
     this.emitters = [];
+    this.done = false;
   }
   /* Load car model method */
 
@@ -56504,6 +56515,7 @@ class Drawer {
       const offset = this.car.dir2.clone().multiplyScalar(this.car.velocity);
       this.car.putOnLandscape(this.land, this.car.coords.clone().add(offset));
       this.car.coords.add(offset);
+      this.car.state = 0;
       carObj.children[3].rotateOnAxis(new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](1, 0, 0), Math.PI / 8);
       carObj.children[8].rotateOnAxis(new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](1, 0, 0), Math.PI / 8);
       carObj.children[6].rotateOnAxis(new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](1, 0, 0), Math.PI / 8);
@@ -56545,6 +56557,18 @@ class Drawer {
       }
 
       this.camera.bound = !this.camera.bound;
+    }
+
+    if (this.keyboard.w || this.keyboard.W || this.keyboard.ц || this.keyboard.Ц) {
+      this.car.state = carStates.FORWARD;
+
+      if (this.keyboard.s || this.keyboard.S || this.keyboard.ы || this.keyboard.Ы) {
+        this.car.state = carStates.STAYS;
+      }
+    } else if (this.keyboard.s || this.keyboard.S || this.keyboard.ы || this.keyboard.Ы) {
+      this.car.state = carStates.BACKWARD;
+    } else {
+      this.car.state = carStates.STAYS;
     }
 
     Object.assign(this.keyboardOld, this.keyboard);
@@ -56602,7 +56626,6 @@ class Drawer {
       const material = new three__WEBPACK_IMPORTED_MODULE_1__["MeshPhongMaterial"]({
         color: 'white',
         side: three__WEBPACK_IMPORTED_MODULE_1__["DoubleSide"],
-        // wireframe: true,
         map: texture
       });
       this.land.scale(100, 100, 100);
@@ -56672,7 +56695,6 @@ class Drawer {
           this.position.add(this.velocity);
         });
         this.car.emitters.push(emitter);
-        emitter.activate();
         this.car.group.add(emitter);
       }
 
@@ -56695,7 +56717,18 @@ class Drawer {
 
     if (this.car.done && this.land.done) {
       // Handle keyboard input
-      this.handleInput(); // Update camera
+      this.handleInput();
+      const state = this.car.state;
+
+      if (state === carStates.STAYS) {
+        this.car.emitters.forEach(e => e.deactivate());
+      } else {
+        this.car.emitters.forEach(e => {
+          e.activate();
+          e.particleVelocity = state === carStates.FORWARD ? new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](0.1, 0, 0) : new three__WEBPACK_IMPORTED_MODULE_1__["Vector3"](-0.1, 0, 0);
+        });
+      } // Update camera
+
 
       const target = this.car.group.position.clone().sub(this.car.group.offset);
       this.camera.lookAt(target);
@@ -56791,7 +56824,7 @@ document.getElementById('date').innerHTML = JSON.parse(_version_txt__WEBPACK_IMP
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony default export */ __webpack_exports__["default"] = ("{ \"date\": \"Thu Jun 18 2020 11:23:23\" }");
+/* harmony default export */ __webpack_exports__["default"] = ("{ \"date\": \"Thu Jun 18 2020 12:49:43\" }");
 
 /***/ })
 

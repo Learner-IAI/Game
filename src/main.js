@@ -101,15 +101,19 @@ class Emitter extends THREE.Object3D {
 
   // Activate emitter function
   activate () {
-    const emit = () => this.emit();
-    this.intervalId = setInterval(emit, this.interval * 1000);
-    this.active = true;
+    if (!this.active) {
+      const emit = () => this.emit();
+      this.intervalId = setInterval(emit, this.interval * 1000);
+      this.active = true;
+    }
   }
 
   // Deactivate emitter function
   deactivate () {
-    clearInterval(this.intervalId);
-    this.active = false;
+    if (this.active) {
+      clearInterval(this.intervalId);
+      this.active = false;
+    }
   }
 
   // Emit one new particle method
@@ -140,6 +144,13 @@ class Emitter extends THREE.Object3D {
   }
 }
 
+// Possible car drive states
+const carStates = {
+  FORWARD: 0,
+  STAYS: 1,
+  BACKWARD: 2
+};
+
 /* Car representation class */
 class Car {
   constructor () {
@@ -150,12 +161,13 @@ class Car {
 
     this.velocity = 0.5;
     this.rotVelocity = Math.PI / 75;
+    this.state = carStates.STAYS;
 
     this.camVec = new THREE.Vector3(20, 10, 1.5);
 
-    this.done = false;
-
     this.emitters = [];
+
+    this.done = false;
   }
 
   /* Load car model method */
@@ -474,6 +486,7 @@ class Drawer {
       const offset = this.car.dir2.clone().multiplyScalar(this.car.velocity);
       this.car.putOnLandscape(this.land, this.car.coords.clone().add(offset));
       this.car.coords.add(offset);
+      this.car.state = 0;
 
       carObj.children[3].rotateOnAxis(new THREE.Vector3(1, 0, 0), Math.PI / 8);
       carObj.children[8].rotateOnAxis(new THREE.Vector3(1, 0, 0), Math.PI / 8);
@@ -525,6 +538,17 @@ class Drawer {
       }
       this.camera.bound = !this.camera.bound;
     }
+    if (this.keyboard.w || this.keyboard.W || this.keyboard.ц || this.keyboard.Ц) {
+      this.car.state = carStates.FORWARD;
+      if (this.keyboard.s || this.keyboard.S || this.keyboard.ы || this.keyboard.Ы) {
+        this.car.state = carStates.STAYS;
+      }
+    } else if (this.keyboard.s || this.keyboard.S || this.keyboard.ы || this.keyboard.Ы) {
+      this.car.state = carStates.BACKWARD;
+    } else {
+      this.car.state = carStates.STAYS;
+    }
+
     Object.assign(this.keyboardOld, this.keyboard);
   }
 
@@ -579,7 +603,6 @@ class Drawer {
       const material = new THREE.MeshPhongMaterial({
         color: 'white',
         side: THREE.DoubleSide,
-        // wireframe: true,
         map: texture
       });
       this.land.scale(100, 100, 100);
@@ -664,7 +687,6 @@ class Drawer {
           }
         );
         this.car.emitters.push(emitter);
-        emitter.activate();
         this.car.group.add(emitter);
       }
 
@@ -689,6 +711,18 @@ class Drawer {
     if (this.car.done && this.land.done) {
       // Handle keyboard input
       this.handleInput();
+
+      const state = this.car.state;
+      if (state === carStates.STAYS) {
+        this.car.emitters.forEach((e) => e.deactivate());
+      } else {
+        this.car.emitters.forEach((e) => {
+          e.activate();
+          e.particleVelocity = state === carStates.FORWARD
+            ? new THREE.Vector3(0.1, 0, 0)
+            : new THREE.Vector3(-0.1, 0, 0);
+        });
+      }
 
       // Update camera
       const target = this.car.group.position.clone().sub(this.car.group.offset);
