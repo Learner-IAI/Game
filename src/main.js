@@ -180,29 +180,7 @@ class Car {
   putOnLandscape (land, vec) {
     const EPS = 0.01;
 
-    /*
-    let H1;
-    let H2;
-
-    // Current matrices evaluation
-    const [curPosition, curHeight] = [land.getPoint(this.coords), land.getHeight(this.coords)];
-
-    H1 = new THREE.Vector3(EPS, land.getHeight(new THREE.Vector2(this.coords.x + EPS, this.coords.y)) - curHeight, 0);
-    H2 = new THREE.Vector3(0, land.getHeight(new THREE.Vector2(this.coords.x, this.coords.y + EPS)) - curHeight, EPS);
-
-    const curNormal1 = H1.clone().cross(H2).normalize();
-    const curTangent1 = H1.clone().cross(curNormal1).normalize();
-    const curBitangent1 = curNormal1.clone().cross(curTangent1).normalize();
-    const curMatrix1 = new THREE.Matrix4().makeBasis(curTangent1, curNormal1, curBitangent1);
-
-    const curNormal = land.getNormal(this.coords);
-    const curTangent = (new THREE.Vector3(curPosition.x, 0, curPosition.z)).cross(new THREE.Vector3(0, 1, 0)).normalize();
-    const curBitangent = curNormal.clone().cross(curTangent).normalize();
-    const curMatrix = new THREE.Matrix4().makeBasis(curTangent, curNormal, curBitangent).multiply(curMatrix1);
-    const inverseCurMatrix = new THREE.Matrix4().getInverse(curMatrix);
-    */
-
-    // New matrices evaluation
+    // Matrix evaluation
     const [newPosition, newHeight] = [land.getPoint(vec), land.getHeight(vec)];
 
     const H1 = new THREE.Vector3(EPS, land.getHeight(new THREE.Vector2(vec.x + EPS, vec.y)) - newHeight, 0);
@@ -219,6 +197,8 @@ class Car {
     newPosition.add(newNormal);
 
     const newMatrix = new THREE.Matrix4().makeBasis(newBitangent, newNormal, newTangent).multiply(newMatrix1);
+
+    // Matrix decomposition and applyment
     const np = new THREE.Vector3();
     const nr = new THREE.Quaternion();
     const ns = new THREE.Vector3();
@@ -226,6 +206,7 @@ class Car {
 
     this.group.position.set(newPosition.x, newPosition.y, newPosition.z);
     this.group.setRotationFromQuaternion(nr);
+    this.group.rotateY(Math.atan2(this.dir2.y, this.dir2.x));
   }
 }
 
@@ -396,11 +377,9 @@ class Landscape extends THREE.Geometry {
       this.makeTorus(this.width, this.height);
       for (let y = 0; y < this.height; y++) {
         for (let x = 0; x < this.width; x++) {
-          /*
           const h = data[(y * this.width + x) * 4] / 255 * 0.1;
           this.setTorusHeight(x, y, h);
           this.heights[y * this.width + x] = h;
-          */
         }
       }
       this.computeVertexNormals();
