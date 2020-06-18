@@ -377,7 +377,7 @@ class Landscape extends THREE.Geometry {
       this.makeTorus(this.width, this.height);
       for (let y = 0; y < this.height; y++) {
         for (let x = 0; x < this.width; x++) {
-          const h = data[(y * this.width + x) * 4] / 255 * 0.1;
+          const h = data[(y * this.width + x) * 4] / 255 * 0.03;
           this.setTorusHeight(x, y, h);
           this.heights[y * this.width + x] = h;
         }
