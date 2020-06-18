@@ -95,7 +95,7 @@
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony default export */ __webpack_exports__["default"] = ("f6775d88992a1363fd1aeeba95e33f6ce6ec1942");
+/* harmony default export */ __webpack_exports__["default"] = ("56e96b30e9fc896f0e02a1a582b4363f15ef4e17");
 
 /***/ }),
 
@@ -56824,7 +56824,7 @@ document.getElementById('date').innerHTML = JSON.parse(_version_txt__WEBPACK_IMP
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony default export */ __webpack_exports__["default"] = ("{ \"date\": \"Thu Jun 18 2020 12:49:43\" }");
+/* harmony default export */ __webpack_exports__["default"] = ("{ \"date\": \"Thu Jun 18 2020 12:50:19\" }");
 
 /***/ })
 

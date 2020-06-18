@@ -180,6 +180,7 @@ class Car {
   putOnLandscape (land, vec) {
     const EPS = 0.01;
 
+    /*
     let H1;
     let H2;
 
@@ -199,12 +200,13 @@ class Car {
     const curBitangent = curNormal.clone().cross(curTangent).normalize();
     const curMatrix = new THREE.Matrix4().makeBasis(curTangent, curNormal, curBitangent).multiply(curMatrix1);
     const inverseCurMatrix = new THREE.Matrix4().getInverse(curMatrix);
+    */
 
     // New matrices evaluation
     const [newPosition, newHeight] = [land.getPoint(vec), land.getHeight(vec)];
 
-    H1 = new THREE.Vector3(EPS, land.getHeight(new THREE.Vector2(vec.x + EPS, vec.y)) - newHeight, 0);
-    H2 = new THREE.Vector3(0, land.getHeight(new THREE.Vector2(vec.x, vec.y + EPS)) - newHeight, EPS);
+    const H1 = new THREE.Vector3(EPS, land.getHeight(new THREE.Vector2(vec.x + EPS, vec.y)) - newHeight, 0);
+    const H2 = new THREE.Vector3(0, land.getHeight(new THREE.Vector2(vec.x, vec.y + EPS)) - newHeight, EPS);
 
     const newNormal1 = H1.clone().cross(H2).normalize();
     const newTangent1 = H1.clone().cross(newNormal1).normalize();
@@ -217,8 +219,8 @@ class Car {
     const newMatrix = new THREE.Matrix4().makeBasis(newTangent, newNormal, newBitangent).multiply(newMatrix1);
 
     // Transform matrix evaluation and applyment
-    const transform = newMatrix.clone().multiply(inverseCurMatrix);
-    this.group.applyMatrix4(transform);
+    /* const transform = newMatrix.clone().multiply(inverseCurMatrix); */
+    this.group.matrix.set(...newMatrix.elements);/* applyMatrix4(transform); */
     newPosition.add(newNormal);
     this.group.position.set(newPosition.x, newPosition.y, newPosition.z);
   }
